@@ -3,7 +3,9 @@ using UnityEngine;
 public class LockOnCameraTarget : MonoBehaviour
 {
     public Transform player;
-    public float enemyWeight = 0.5f; // 0 = fully on player, 0.5 = midpoint, 1 = fully on enemy
+    public float enemyWeight = 0.5f;
+
+    public float smoothSpeed = 5f; // higher = faster, lower = slower
 
     LockOnSystem lockOn;
 
@@ -14,16 +16,26 @@ public class LockOnCameraTarget : MonoBehaviour
 
     void LateUpdate()
     {
+        Vector3 targetPosition;
+
         if (lockOn == null || lockOn.TargetEnemy == null)
         {
-            transform.position = player.position;
-            return;
+            targetPosition = player.position;
+        }
+        else
+        {
+            targetPosition = Vector3.Lerp(
+                player.position,
+                lockOn.TargetEnemy.transform.position,
+                enemyWeight
+            );
         }
 
+        // Smoothly move toward target position over time
         transform.position = Vector3.Lerp(
-            player.position,
-            lockOn.TargetEnemy.transform.position,
-            enemyWeight
+            transform.position,
+            targetPosition,
+            Time.deltaTime * smoothSpeed
         );
     }
 }
