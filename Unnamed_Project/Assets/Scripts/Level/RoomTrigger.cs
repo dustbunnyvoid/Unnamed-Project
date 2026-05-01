@@ -1,58 +1,114 @@
 using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
+
+[System.Serializable]
+public class EnemyWave
+{
+    public GameObject prefab;
+    public int count = 1;
+    public string displayName;
+    [TextArea(2, 4)] public string description;
+}
 
 public class RoomTrigger : MonoBehaviour
 {
     [Header("Enemies")]
-    public List<GameObject> enemiesToSpawn;
+    public List<EnemyWave> waves = new List<EnemyWave>();
     public List<Transform> spawnPoints;
 
     [Header("Door")]
     public GameObject door;
 
+    [Header("Intro Timing")]
+    public float introDuration = 3.5f;
+    public float introFadeTime = 0.5f;
+
     bool _activated;
-    int _remainingEnemies;
+    PlayerMovement _player;
+    LockOnSystem _lockOn;
 
     void OnTriggerEnter(Collider other)
     {
         if (_activated || !other.CompareTag("Player")) return;
         _activated = true;
 
+        _player = other.GetComponentInParent<PlayerMovement>();
+        _lockOn  = other.GetComponentInParent<LockOnSystem>();
         if (door != null) door.SetActive(true);
-        SpawnEnemies();
+        StartCoroutine(RunRoom());
     }
 
-    void SpawnEnemies()
+    IEnumerator RunRoom()
     {
-        _remainingEnemies = enemiesToSpawn.Count;
+        for (int i = 0; i < waves.Count; i++)
+            yield return StartCoroutine(RunWave(waves[i], i));
 
-        for (int i = 0; i < enemiesToSpawn.Count; i++)
+        OpenDoor();
+    }
+
+    IEnumerator RunWave(EnemyWave wave, int waveIndex)
+    {
+        int count = Mathf.Max(1, wave.count);
+        Transform sp = (spawnPoints != null && waveIndex < spawnPoints.Count)
+            ? spawnPoints[waveIndex]
+            : transform;
+
+        for (int i = 0; i < count; i++)
+            yield return StartCoroutine(SpawnAndFight(wave, sp, isFirst: i == 0));
+    }
+
+    // First enemy in a wave: freeze player, show intro card, then start combat.
+    // Subsequent enemies in the same wave: brief pause then straight to combat.
+    IEnumerator SpawnAndFight(EnemyWave wave, Transform sp, bool isFirst)
+    {
+        if (isFirst)
         {
-            Transform spawnPoint = (spawnPoints != null && i < spawnPoints.Count)
-                ? spawnPoints[i]
-                : transform;
-
-            var go = Instantiate(enemiesToSpawn[i], spawnPoint.position, spawnPoint.rotation);
-            var health = go.GetComponent<HealthComponent>();
-            if (health != null)
-                health.OnDeath += OnEnemyDied;
-            else
-                _remainingEnemies--;
+            SetFrozen(true);
+            yield return new WaitForSeconds(0.3f);
+        }
+        else
+        {
+            yield return new WaitForSeconds(0.8f);
         }
 
-        if (_remainingEnemies <= 0)
-            OpenDoor();
+        var go = Instantiate(wave.prefab, sp.position, sp.rotation);
+        FXHelper.SpawnBurst(sp.position + Vector3.up * 0.8f, new Color(0.5f, 0f, 1f));
+        _lockOn?.ForceTarget(go);
+
+        bool dead = false;
+        var health = go.GetComponent<HealthComponent>();
+        if (health != null) health.OnDeath += () => dead = true;
+        else dead = true;
+
+        if (isFirst)
+        {
+            if (!string.IsNullOrWhiteSpace(wave.displayName) && RoomIntroUI.Instance != null)
+                yield return StartCoroutine(RoomIntroUI.Instance.Show(wave.displayName, wave.description, introDuration, introFadeTime));
+            else
+                yield return new WaitForSeconds(introDuration);
+
+            SetFrozen(false);
+        }
+
+        go.GetComponent<RusherAI>()?.WakeUp();
+        go.GetComponent<SwingerAI>()?.WakeUp();
+
+        while (!dead)
+        {
+            if (go == null) break;
+            yield return null;
+        }
     }
 
-    void OnEnemyDied()
+    void SetFrozen(bool frozen)
     {
-        _remainingEnemies--;
-        if (_remainingEnemies <= 0)
-            OpenDoor();
+        if (_player != null) _player.IsFrozen = frozen;
     }
 
     void OpenDoor()
     {
+        SetFrozen(false);
         if (door != null) door.SetActive(false);
     }
 }
