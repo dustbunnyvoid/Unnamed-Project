@@ -3,9 +3,11 @@ using UnityEngine.AI;
 
 [RequireComponent(typeof(NavMeshAgent))]
 [RequireComponent(typeof(HealthComponent))]
+[RequireComponent(typeof(Rigidbody))]
 public class SwingerAI : MonoBehaviour
 {
     [Header("Movement")]
+    public float moveSpeed = 2.5f;
     public float approachStopDistance = 2.5f;
 
     [Header("Attack")]
@@ -24,11 +26,17 @@ public class SwingerAI : MonoBehaviour
 
     NavMeshAgent _agent;
     Transform _player;
+    bool _isAwake;
+    bool _isDead;
 
     void Awake()
     {
         _agent = GetComponent<NavMeshAgent>();
+        _agent.speed = moveSpeed;
         _agent.stoppingDistance = approachStopDistance;
+        var rb = GetComponent<Rigidbody>() ?? gameObject.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
     }
 
     void Start()
@@ -37,9 +45,12 @@ public class SwingerAI : MonoBehaviour
         GetComponent<HealthComponent>().OnDeath += Die;
     }
 
+    public void WakeUp() => _isAwake = true;
+
     void Update()
     {
-        if (_player == null) return;
+        if (!_isAwake || _isDead || _player == null) return;
+        if (!_agent.enabled || !_agent.isOnNavMesh) return;
 
         _stateTimer -= Time.deltaTime;
 
@@ -100,6 +111,7 @@ public class SwingerAI : MonoBehaviour
 
     void Die()
     {
+        _isDead = true;
         _agent.enabled = false;
         Destroy(gameObject, 0.1f);
     }

@@ -11,15 +11,25 @@ public class LockOnSystem : MonoBehaviour
     [Tooltip("False = Closest (cycles nearest to farthest), True = Vision (cone only)")]
     public bool visionMode = false;
     public float visionAngle = 45f;
-    public float maxDistance = 5f;
 
     [Header("Debug")]
     public bool debugVisible = true;
 
-    public GameObject TargetEnemy;
+    [field: SerializeField] public GameObject TargetEnemy { get; private set; }
 
     [SerializeField] private List<GameObject> _sortedEnemies = new List<GameObject>();
     private int _cycleIndex = -1;
+    private bool _forceLocked;
+
+    // Called by RoomTrigger to hard-set the lock-on target (e.g. on enemy spawn).
+    // Bypasses the distance check so the target isn't immediately dropped.
+    public void ForceTarget(GameObject target)
+    {
+        TargetEnemy = target;
+        _forceLocked = target != null;
+        _cycleIndex = _sortedEnemies.IndexOf(target);
+        if (_cycleIndex < 0) _cycleIndex = 0;
+    }
 
     void Update()
     {
@@ -29,7 +39,10 @@ public class LockOnSystem : MonoBehaviour
             CycleTarget();
 
         if (Input.GetKeyDown(KeyCode.Y))
+        {
             TargetEnemy = null;
+            _forceLocked = false;
+        }
 
         CheckDistance();
     }
@@ -67,9 +80,17 @@ public class LockOnSystem : MonoBehaviour
 
     void CheckDistance()
     {
-        if (TargetEnemy != null)
-            if (Vector3.Distance(transform.position, TargetEnemy.transform.position) > maxDistance)
-                TargetEnemy = null;
+        if (TargetEnemy == null)
+        {
+            _forceLocked = false;
+            return;
+        }
+
+        // When force-locked by a room spawn, skip the distance drop entirely.
+        if (_forceLocked) return;
+
+        if (Vector3.Distance(transform.position, TargetEnemy.transform.position) > castRadius)
+            TargetEnemy = null;
     }
 
     // --- Detection ---

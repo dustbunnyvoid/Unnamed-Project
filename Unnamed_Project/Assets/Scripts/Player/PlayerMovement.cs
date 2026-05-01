@@ -6,16 +6,36 @@ public class PlayerMovement : MonoBehaviour
     LockOnSystem lockOn;
     Camera cam;
     public float moveSpeed = 2f;
+    public float rotationSpeed = 10f;
+
+    bool _isFrozen;
+    public bool IsFrozen
+    {
+        get => _isFrozen;
+        set
+        {
+            _isFrozen = value;
+            if (value && rb != null)
+                rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+        }
+    }
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
         lockOn = GetComponent<LockOnSystem>();
         cam = Camera.main;
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
     }
 
     void FixedUpdate()
     {
+        if (_isFrozen)
+        {
+            rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+            return;
+        }
+
         float xMove = Input.GetAxisRaw("Horizontal");
         float zMove = Input.GetAxisRaw("Vertical");
         CharacterMovement(xMove, zMove);
@@ -48,6 +68,7 @@ public class PlayerMovement : MonoBehaviour
 
         if (directionToEnemy.sqrMagnitude < 0.001f) return;
 
-        transform.rotation = Quaternion.LookRotation(directionToEnemy);
+        Quaternion target = Quaternion.LookRotation(directionToEnemy);
+        transform.rotation = Quaternion.Slerp(transform.rotation, target, Time.fixedDeltaTime * rotationSpeed);
     }
 }
